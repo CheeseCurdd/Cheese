@@ -1,0 +1,162 @@
+-- Load the Rayfield UI Library
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Create the Main Window
+local Window = Rayfield:CreateWindow({
+    Name = "🌱 Mutation Plant Editor",
+    LoadingTitle = "Initializing Lab Environment...",
+    LoadingSubtitle = "by Xolbor",
+    Theme = "Ocean", -- Professional dark/teal theme fit for a plant lab
+
+    ConfigurationSaving = {
+        Enabled = false,
+        FolderName = "PlantEditorConfig",
+        FileName = "Config"
+    },
+
+    KeySystem = false
+})
+
+-- Main Tab
+local Tab = Window:CreateTab("Dashboard", 4483362458) 
+
+-- State Variables
+local selectedMutation = "Normal"
+local mutationsList = { "Normal", "Gold", "Rainbow", "Electric", "Frozen", "Starstruck", "Bloodlit" }
+
+-- --- UI ELEMENTS ---
+
+Tab:CreateSection("Configuration Settings")
+
+Tab:CreateParagraph({
+    Title = "💡 Instructions", 
+    Content = "Equip the target plant in your character's hand, choose a mutation, and apply the modifications."
+})
+
+local MutationDropdown = Tab:CreateDropdown({
+    Name = "Visual Mutation Type",
+    Options = mutationsList,
+    CurrentOption = {"Normal"},
+    MultipleOptions = false,
+    Callback = function(Option)
+        selectedMutation = Option[1]
+    end,
+})
+
+Tab:CreateSection("Execution")
+
+-- --- VISUAL ENGINE ---
+local function applyVisuals(obj, mutation)
+    -- Remove old particles
+    for _, child in ipairs(obj:GetChildren()) do
+        if child.Name == "MutateEffect" then child:Destroy() end
+    end
+
+    -- Remove textures so mutation colors show vibrantly
+    if obj:IsA("MeshPart") then obj.TextureID = "" end
+    if obj:IsA("SurfaceAppearance") or obj:IsA("Decal") or obj:IsA("Texture") then obj:Destroy() end
+
+    -- Apply Materials & Colors (Only to visible parts)
+    if obj:IsA("BasePart") and obj.Transparency < 1 then
+        if mutation == "Normal" then
+            obj.Material = Enum.Material.Plastic
+        elseif mutation == "Gold" then
+            obj.Material = Enum.Material.Foil
+            obj.Color = Color3.fromRGB(255, 223, 0)
+            local s = Instance.new("Sparkles", obj)
+            s.Name = "MutateEffect"
+            s.SparkleColor = Color3.fromRGB(255, 255, 0)
+        elseif mutation == "Rainbow" then
+            obj.Material = Enum.Material.Neon
+            local pe = Instance.new("ParticleEmitter", obj)
+            pe.Name = "MutateEffect"
+            pe.Texture = "rbxassetid://243660364"
+            pe.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 50)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(50, 255, 50)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 50, 255))
+            })
+        elseif mutation == "Electric" then
+            obj.Material = Enum.Material.Neon
+            obj.Color = Color3.fromRGB(0, 255, 255)
+        elseif mutation == "Frozen" then
+            obj.Material = Enum.Material.Ice
+            obj.Color = Color3.fromRGB(150, 200, 255)
+            obj.Transparency = 0.3
+        elseif mutation == "Starstruck" then
+            obj.Material = Enum.Material.Neon
+            obj.Color = Color3.fromRGB(180, 50, 255)
+            local s = Instance.new("Sparkles", obj)
+            s.Name = "MutateEffect"
+            s.SparkleColor = Color3.fromRGB(255, 100, 255)
+        elseif mutation == "Bloodlit" then
+            obj.Material = Enum.Material.Neon
+            obj.Color = Color3.fromRGB(255, 20, 20)
+            local f = Instance.new("Fire", obj)
+            f.Name = "MutateEffect"
+            f.Size = 10
+        end
+    end
+end
+
+-- --- APPLY BUTTON ---
+local ApplyButton = Tab:CreateButton({
+    Name = "Apply Modifications",
+    Callback = function()
+        local character = LocalPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if not character or not humanoid then return end
+        
+        local heldTool = character:FindFirstChildWhichIsA("Tool")
+        if not heldTool then
+            Rayfield:Notify({ 
+                Title = "Action Required", 
+                Content = "Please equip a plant item before executing modifications.", 
+                Duration = 4, 
+                Image = 4483362458 
+            })
+            return
+        end
+
+        local toolName = heldTool.Name
+
+        -- UNEQUIP TOOL FOR SAFE EDITING
+        humanoid:UnequipTools()
+        local targetTool = LocalPlayer.Backpack:WaitForChild(toolName, 2) 
+        if not targetTool then return end
+
+        -- 1. UPDATE VALUE OBJECTS & ATTRIBUTES
+        for _, child in pairs(targetTool:GetDescendants()) do
+            local lowerName = string.lower(child.Name)
+            if child:IsA("StringValue") then
+                if string.find(lowerName, "mutation") or string.find(lowerName, "rarity") then 
+                    child.Value = selectedMutation 
+                end
+            end
+        end
+        targetTool:SetAttribute("Mutation", selectedMutation)
+
+        -- 2. PROCESS PARTS (Visuals Only)
+        for _, obj in ipairs(targetTool:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                applyVisuals(obj, selectedMutation)
+            end
+            
+            if obj:IsA("SpecialMesh") then
+                obj.TextureID = "" 
+            end
+        end
+
+        -- RE-EQUIP TOOL
+        humanoid:EquipTool(targetTool)
+
+        Rayfield:Notify({ 
+            Title = "Success", 
+            Content = toolName .. " successfully altered to " .. selectedMutation .. ".", 
+            Duration = 4, 
+            Image = 4483362458 
+        })
+    end,
+})
